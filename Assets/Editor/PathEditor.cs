@@ -3,22 +3,53 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 
+using UnityEditor.IMGUI.Controls;
+using UnityEditorInternal;
+using UnityEngine.AI;
+
 [CustomEditor(typeof(PathCreator))]
 public class PathEditor : Editor {
     private PathCreator _Creator;
     private Path _Path;
+    private bool Edit = false;
+    private bool IsClosed;
     private int _SelectedPoint = -1;
+    private GUIContent _EditModeButton;
+
+    public override void OnInspectorGUI() {
+        // base.OnInspectorGUI();
+
+        EditorGUILayout.BeginHorizontal();
+        EditorGUILayout.LabelField("Edit Spline", GUILayout.Width(130));
+        if (GUILayout.Button(_EditModeButton, GUILayout.Width(33), GUILayout.Height(23))) {
+            Edit = !Edit;
+            SceneView.RepaintAll();
+        }
+        EditorGUILayout.EndHorizontal();
+
+        IsClosed = EditorGUILayout.Toggle("Is Closed", IsClosed);
+        if (_Path.IsClosed != IsClosed) {
+            _Path.ToggleClosed();
+            SceneView.RepaintAll();
+
+            IsClosed = _Path.IsClosed;
+        }
+    }
 
     public void OnSceneGUI() {
         Input();
         Draw();
     }
 
+    public void Reset() {
+        Debug.Log("reset");
+    }
+
     private void Input() {
         Event guiEvent = Event.current;
         Vector2 mousePosition = HandleUtility.GUIPointToWorldRay(guiEvent.mousePosition).origin;
 
-        if (_Creator.Edit && guiEvent.type == EventType.MouseDown && guiEvent.button == 0) {
+        if (Edit && guiEvent.type == EventType.MouseDown && guiEvent.button == 0) {
             // Get selected point.
             int selectedPoint = _SelectedPoint;
             _SelectedPoint = -1;
@@ -27,7 +58,7 @@ public class PathEditor : Editor {
                     if (i % 3 == 0) {
                         _SelectedPoint = i;
                         break;
-                    } else if (i == selectedPoint + 1 || i == selectedPoint - 1) {
+                    } else if (i == _Path.LoopIndex(selectedPoint + 1) || i == _Path.LoopIndex(selectedPoint - 1)) {
                         _SelectedPoint = selectedPoint;
                         break;
                     }
@@ -51,10 +82,10 @@ public class PathEditor : Editor {
         for (int i = 0; i < _Path.NumSegments; i++) {
             Vector2[] points = _Path.GetPointsInSegment(i);
 
-            Handles.DrawBezier(points[0], points[3], points[1], points[2], Color.green, null, 2);
+            Handles.DrawBezier(points[0], points[3], points[1], points[2], Color.green, null, Edit ? 2 : 1);
         }
 
-        if (_Creator.Edit) {
+        if (Edit) {
             // Draw points
             Handles.color = new Color(0, .5f, 0);
             for (int i = 0; i < _Path.NumPoints; i++) {
@@ -85,25 +116,29 @@ public class PathEditor : Editor {
 
         DrawPoint(_SelectedPoint);
 
-        if (_SelectedPoint + 1 < _Path.NumPoints) {
-            Handles.DrawLine(_Path[_SelectedPoint], _Path[_SelectedPoint + 1]);
-            DrawPoint(_SelectedPoint + 1);
+        if (_SelectedPoint + 1 < _Path.NumPoints || _Path.IsClosed) {
+            Handles.DrawLine(_Path[_SelectedPoint], _Path[_Path.LoopIndex(_SelectedPoint + 1)]);
+            DrawPoint(_Path.LoopIndex(_SelectedPoint + 1));
         }
 
-        if (_SelectedPoint - 1 >= 0) {
-            Handles.DrawLine(_Path[_SelectedPoint], _Path[_SelectedPoint - 1]);
-            DrawPoint(_SelectedPoint - 1);
+        if (_SelectedPoint - 1 >= 0 || _Path.IsClosed) {
+            Handles.DrawLine(_Path[_SelectedPoint], _Path[_Path.LoopIndex(_SelectedPoint - 1)]);
+            DrawPoint(_Path.LoopIndex(_SelectedPoint - 1));
         }
     }
 
     private void OnEnable() {
         _Creator = target as PathCreator;
-        _Creator.Edit = false;
 
         if (_Creator.Path == null) {
             _Creator.CreatePath();
         }
 
         _Path = _Creator.Path;
+
+        _EditModeButton = new GUIContent(
+            EditorGUIUtility.IconContent("EditCollider").image,
+            EditorGUIUtility.TrTextContent("Edit spline path.\n\n - Click while holding shift to add more segments.").text
+        );
     }
 }

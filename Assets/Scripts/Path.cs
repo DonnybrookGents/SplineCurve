@@ -4,7 +4,8 @@ using UnityEngine;
 
 [System.Serializable]
 public class Path {
-    [SerializeField, HideInInspector] List<Vector2> Points;
+    [HideInInspector] public bool IsClosed;
+    [SerializeField, HideInInspector] private List<Vector2> Points;
 
     public Vector2 this[int i] {
         get {
@@ -20,7 +21,7 @@ public class Path {
 
     public int NumSegments {
         get {
-            return ((Points.Count - 4) / 3) + 1;
+            return Points.Count / 3;
         }
     }
 
@@ -44,7 +45,7 @@ public class Path {
             Points[i * 3],
             Points[(i * 3) + 1],
             Points[(i * 3) + 2],
-            Points[(i * 3) + 3]
+            Points[LoopIndex((i * 3) + 3)]
         };
     }
 
@@ -54,12 +55,12 @@ public class Path {
 
         // Move handles with anchor.
         if (i % 3 == 0) {
-            if (i + 1 < Points.Count) {
-                Points[i + 1] += deltaMove;
+            if (i + 1 < Points.Count || IsClosed) {
+                Points[LoopIndex(i + 1)] += deltaMove;
             }
 
-            if (i - 1 >= 0) {
-                Points[i - 1] += deltaMove;
+            if (i - 1 >= 0 || IsClosed) {
+                Points[LoopIndex(i - 1)] += deltaMove;
             }
         } else {
             bool nextPointAnchor = (i + 1) % 3 == 0;
@@ -67,12 +68,27 @@ public class Path {
             int anchorIndex = nextPointAnchor ? i + 1 : i - 1;
             int handleIndex = nextPointAnchor ? i + 2 : i - 2;
 
-            if (handleIndex >= 0 && handleIndex < Points.Count) {
-                float distance = (Points[anchorIndex] - Points[handleIndex]).magnitude;
-                Vector2 direction = (Points[anchorIndex] - position).normalized;
+            if ((handleIndex >= 0 && handleIndex < Points.Count) || IsClosed) {
+                float distance = (Points[LoopIndex(anchorIndex)] - Points[LoopIndex(handleIndex)]).magnitude;
+                Vector2 direction = (Points[LoopIndex(anchorIndex)] - position).normalized;
 
-                Points[handleIndex] = Points[anchorIndex] + direction * distance;
+                Points[LoopIndex(handleIndex)] = Points[LoopIndex(anchorIndex)] + direction * distance;
             }
         }
+    }
+
+    public void ToggleClosed() {
+        IsClosed = !IsClosed;
+
+        if (IsClosed) {
+            Points.Add(Points[Points.Count - 1] * 2 - Points[Points.Count - 2]);
+            Points.Add(Points[0] * 2 - Points[1]);
+        } else {
+            Points.RemoveRange(Points.Count - 2, 2);
+        }
+    }
+
+    public int LoopIndex(int i) {
+        return (i + Points.Count) % Points.Count;
     }
 }
