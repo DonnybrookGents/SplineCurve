@@ -7,6 +7,7 @@ using UnityEditor;
 public class PathEditor : Editor {
     private PathCreator _Creator;
     private Path _Path;
+    private int _SelectedPoint = -1;
 
     public void OnSceneGUI() {
         Input();
@@ -17,9 +18,29 @@ public class PathEditor : Editor {
         Event guiEvent = Event.current;
         Vector2 mousePosition = HandleUtility.GUIPointToWorldRay(guiEvent.mousePosition).origin;
 
-        if (guiEvent.type == EventType.MouseDown && _Creator.Edit && guiEvent.button == 0 && guiEvent.shift) {
-            Undo.RecordObject(_Creator, "Add segment");
-            _Path.AddSegment(mousePosition);
+        if (_Creator.Edit && guiEvent.type == EventType.MouseDown && guiEvent.button == 0) {
+            // Get selected point.
+            int selectedPoint = _SelectedPoint;
+            _SelectedPoint = -1;
+            for (int i = 0; i < _Path.NumPoints; i++) {
+                if (Vector2.Distance(mousePosition, _Path[i]) < _Creator.PointRadius * 2) {
+                    if (i % 3 == 0) {
+                        _SelectedPoint = i;
+                        break;
+                    } else if (i == selectedPoint + 1 || i == selectedPoint - 1) {
+                        _SelectedPoint = selectedPoint;
+                        break;
+                    }
+                }
+            }
+
+            // Add new segment.
+            if (guiEvent.shift) {
+                Undo.RecordObject(_Creator, "Add segment");
+                _Path.AddSegment(mousePosition);
+
+                _SelectedPoint = _Path.NumPoints - 1;
+            }
         }
     }
 
@@ -31,23 +52,47 @@ public class PathEditor : Editor {
             Vector2[] points = _Path.GetPointsInSegment(i);
 
             Handles.DrawBezier(points[0], points[3], points[1], points[2], Color.green, null, 2);
-
-            if (_Creator.Edit) {
-                Handles.DrawLine(points[0], points[1]);
-                Handles.DrawLine(points[2], points[3]);
-            }
         }
 
-        // Draw handles
         if (_Creator.Edit) {
+            // Draw points
+            Handles.color = new Color(0, .5f, 0);
             for (int i = 0; i < _Path.NumPoints; i++) {
-                Vector2 newPosition = Handles.FreeMoveHandle(_Path[i], Quaternion.identity, .025f, Vector2.zero, Handles.RectangleHandleCap);
-
-                if (_Path[i] != newPosition) {
-                    Undo.RecordObject(_Creator, "Move point");
-                    _Path.MovePoint(i, newPosition);
+                if (i % 3 == 0) {
+                    DrawPoint(i);
                 }
             }
+
+            // Draw selected point and handles.
+            Handles.color = Color.white;
+            DrawSelected();
+        }
+    }
+
+    private void DrawPoint(int i) {
+        Vector2 newPosition = Handles.FreeMoveHandle(_Path[i], Quaternion.identity, _Creator.PointRadius, Vector2.zero, Handles.CubeHandleCap);
+
+        if (_Path[i] != newPosition) {
+            Undo.RecordObject(_Creator, "Move point");
+            _Path.MovePoint(i, newPosition);
+        }
+    }
+
+    private void DrawSelected() {
+        if (_SelectedPoint < 0) {
+            return;
+        }
+
+        DrawPoint(_SelectedPoint);
+
+        if (_SelectedPoint + 1 < _Path.NumPoints) {
+            Handles.DrawLine(_Path[_SelectedPoint], _Path[_SelectedPoint + 1]);
+            DrawPoint(_SelectedPoint + 1);
+        }
+
+        if (_SelectedPoint - 1 >= 0) {
+            Handles.DrawLine(_Path[_SelectedPoint], _Path[_SelectedPoint - 1]);
+            DrawPoint(_SelectedPoint - 1);
         }
     }
 
