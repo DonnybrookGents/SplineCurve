@@ -27,7 +27,7 @@ public class PathEditor : Editor {
         }
         EditorGUILayout.EndHorizontal();
 
-        IsClosed = EditorGUILayout.Toggle("Is Closed", IsClosed);
+        IsClosed = EditorGUILayout.Toggle("Closed Loop", IsClosed);
         if (_Path.IsClosed != IsClosed) {
             _Path.ToggleClosed();
             SceneView.RepaintAll();
